@@ -7,7 +7,7 @@
 
 
 int main(){
-    print_MOTD("https://raw.githubusercontent.com/BestDevOfc/MOTD/main/MOTD.txt");
+    print_MOTD("https://raw.githubusercontent.com/BestDevOfc/Dummy-Authentication-System/main/1.%20Simple%20Authentication%20/MOTD.txt");
 
 
     int invalid_option = 1;
