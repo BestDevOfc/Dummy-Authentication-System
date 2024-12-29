@@ -69,6 +69,18 @@ class Scraper{
         }
 };
 
+/*
+
+For inhereitance we could do something like:
+
+class TestScraper : public Scraper{
+
+    ...
+
+}
+
+*/
+
 int main(){
     // get threads from user:
     int threads = 0;
