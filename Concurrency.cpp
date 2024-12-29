@@ -1,3 +1,6 @@
+// concurrency: runs on one core -> less heavy on system
+// parallelism: multiple threads on numerous cores (better for mass credential spraying programs) -> more heavy on the system 
+
 #include <iostream>
 #include <vector>
 #include <future>
