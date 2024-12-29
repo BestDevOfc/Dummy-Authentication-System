@@ -3,6 +3,8 @@
 #include <cstdlib>
 #include <ctime>
 #include <fstream>
+#include <ctime>
+#include <filesystem>
 
 
 namespace col{
@@ -34,11 +36,13 @@ class Scraper{
     public:
 
         std::string url = "URL_HERE";
+        std::string file_path = "";
         std::ofstream results_file;
         int threads;
-        Scraper( int a_threads ){
+        Scraper( int a_threads, std::string a_file_path ){
             
             threads = a_threads;
+            file_path = a_file_path;
             std::cout << col::green << "[ Creating the Scraper Object - this is the equiavlent of __init__() in Python! ] \n";
         }
 
@@ -52,7 +56,7 @@ class Scraper{
             }
 
             // open the results file:
-            results_file.open("Results.txt", std::ios::app);
+            results_file.open(file_path, std::ios::app);
             if( !results_file ){
                 std::cerr << col::red << "[ Failed to open the \'Results.txt\' file needed to save the results !  ]\n";
                 return 1;
@@ -69,27 +73,26 @@ class Scraper{
         }
 };
 
-/*
 
-For inhereitance we could do something like:
-
-class TestScraper : public Scraper{
-
-    ...
-
-}
-
-*/
 
 int main(){
-    // get threads from user:
+    
+    
     int threads = 0;
+    std::string file_path = "";
 
+    // setting up our results file path:
+    if( !std::filesystem::exists("Results") ){
+        std::filesystem::create_directory("Results");
+    }
+    file_path = "Results/Results-" + std::to_string( std::time(nullptr) ) + ".txt";
+
+    // get user input:
     std::cout << col::green << "[ Enter the Threads Count ]: ";
     std::cin >> threads;
 
-    Scraper Obj( threads );
-
+    // run the scraper
+    Scraper Obj( threads, file_path );
     std::cout << col::yellow << "\n[ The number of Threads ]: " << Obj.threads << '\n';
 
     Obj.main();
