@@ -21,11 +21,19 @@ int main(){
        threads.push_back( std::move( a_thread ) );
     }
 
-    // don't want our program to terminate execution until all of the threads have finished, time to join them 
-    // into our main thread
+    /*
+    don't want our program to terminate execution until all of the threads have finished, time to join them 
+    into our main thread
     for( int i = 0; i <= 10; i++ ){
         threads[i].join();
     }
+    */
+
+    // remember, elements in an array are just fancy pointers ! 
+    for( std::thread& thread : threads ){
+        thread.join();
+    }
+    
 
     std::cout << "\n[ Returned back the Main Thread! ]\n";
     return 0;
