@@ -6,19 +6,54 @@
 
 // clang++ --std=c++17 -o main test.cpp -stdlib=libc++ -lcurl
 
-size_t writeCallback(char *ptr, size_t size, size_t nmemb, std::string *data) { 
-    // Callback function to handle the response data
-    // std::string::append ptr data buffer into 
-    // our response_data string for storage
-    data->append(ptr, size * nmemb);                
-                                                    
-    // returning the bytes we've processed (needed )
-    return size * nmemb;                                                                               
-}
-
 
 class RequestsWrapper{
     private:
+        /*
+        
+            The reason we are using static for the writeCallback function in the Curl handler is due to how member functions in
+            C++ work. All non-static member functions implicitly receive a this pointer as their first argument, which refers to the
+            instance of the class that invoked the function. This means their function signature includes the this pointer, even
+            though it’s not explicitly visible in the code.
+
+            This is why we don't need to write self.member or this->member in C++ unless there's ambiguity — the compiler implicitly
+            associates the member variables and functions with the current instance through the this pointer.
+
+            However, the Curl library is written in C and expects callback functions to have a specific
+            signature that does not include this or any concept of class instances. Curl only knows how
+            to handle plain old data types (PODs) like pointers and fundamental types. 
+            It does not understand the complexities of C++ objects or the this pointer.
+
+            To bridge this gap, we make the callback function static. Static member functions belong to the class itself,
+            not any specific instance, and therefore do not have a this pointer in their signature.
+            This allows the function signature to match what Curl expects. If we need to access instance-specific data
+            inside the static function, we can pass the instance explicitly via Curl's userdata mechanism.
+
+            Code Example:
+
+                class MyClass {
+                public:
+                    void member_function() {
+                        // `this` is implicitly passed as an argument
+                        std::cout << "Address of this class in memory is: " << this << '\n';
+                    }
+
+                    static void not_a_member_function() {
+                        // No `this` pointer here; this function belongs to the class, not any instance
+                        std::cout << "This does not exist implicitly for this function!\n";
+                    }
+                };        
+        */
+        static size_t writeCallback(char *ptr, size_t size, size_t nmemb, std::string *data) { 
+            // Callback function to handle the response data
+            // std::string::append ptr data buffer into 
+            // our response_data string for storage
+            data->append(ptr, size * nmemb);                
+                                                            
+            // returning the bytes we've processed (needed )
+            return size * nmemb;                                                                               
+        }
+
 
     public:
         RequestsWrapper(){
@@ -31,13 +66,13 @@ class RequestsWrapper{
                 bool follow_redirects = true
                  ){
             CURL* curlObj;
+            // stores the status code from the curl handler when we make a request, this helps us see what kind of error happened
             CURLcode responseCode;
 
-            std::cout << "[ Initializing the Curl Handler... ]\n";
+            // initializing the curl handler
             curlObj = curl_easy_init();
             if( !curlObj ){
-                std::cerr << "[ Failed to initialize the Curl handler !  ]\n";
-                return 1;
+                throw std::runtime_error("[ Failed to initialize the Curl handler !  ]\n");
             }
 
             // setup the protocol & url
@@ -76,9 +111,6 @@ class RequestsWrapper{
 
             curl_easy_setopt( curlObj, CURLOPT_HTTPHEADER, curl_headers );
 
-            // std::cout << "[ Performing the GET request to resource \"" << url << "\" ]\n";
-            
-
             // tell curl which function to use to write callback data (point of this is buffering, more efficient)
             curl_easy_setopt( curlObj, CURLOPT_WRITEFUNCTION, writeCallback );
             // tell curl what variable will store the output
@@ -87,17 +119,13 @@ class RequestsWrapper{
             responseCode = curl_easy_perform( curlObj );
 
             // something went wrong when sending the GET request:
-            std::cout << "[ ResponseCode = " << responseCode << " ]\n";
             if( responseCode != CURLE_OK ){
                 // just simply prints the associated key-value error from the responseCode integer:
                 // makes it similar to python's .GET function, easier to program with this behavior
                 std::string error = "[ Something went wrong when sending the GET request, error ] --> " + std::string(curl_easy_strerror(responseCode));
                 throw std::runtime_error(error);
-                // return 1;
             }
             
-            // std::cout << "[ Output of web request ]: " << output << "\n";
-
             // clean up our handler
             curl_easy_cleanup(curlObj);
 
@@ -108,7 +136,7 @@ class RequestsWrapper{
 
 
 int main(){
-    std::string url = "http://htetpbin.org/ip";
+    std::string url = "http://httpbin.org/ip";
     std::vector< std::string > headers = {
         "User-Agent: Chrome",
         "Referer: https://www.google.com",
@@ -123,7 +151,7 @@ int main(){
     }
     catch(const std::runtime_error& error){
         // catch our custom runtime error
-        std::cout << "[ The following standard exception was thrown ]: \n";
+        std::cerr << "[ The following standard exception was thrown ]: \n";
         std::cerr << error.what() << '\n';
     }
     catch(...){
@@ -132,7 +160,6 @@ int main(){
         std::cerr << "[ Some unknown error was thrown - not able to access the object/value of it. ]\n";
 
     }
-    
 
     return 0;
 
