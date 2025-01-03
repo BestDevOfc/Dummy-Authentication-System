@@ -2,6 +2,7 @@
 #include <vector>
 #include <set>
 #include <curl/curl.h>
+#include <stdexcept>
 
 // clang++ --std=c++17 -o main test.cpp -stdlib=libc++ -lcurl
 
@@ -15,69 +16,20 @@ size_t writeCallback(char *ptr, size_t size, size_t nmemb, std::string *data) {
     return size * nmemb;                                                                               
 }
 
-class RequestMethod{
-    private:
-
-    public:
-        int GET = 1;
-        int POST = 2;
-        int PUT = 3;
-        int DELETE = 4;
-        int TRACE = 5;
-        int HEAD = 6;
-        int OPTIONS = 7;
-        int PATCH = 8;
-        RequestMethod(){
-
-        }
-};
 
 class RequestsWrapper{
     private:
 
     public:
-        std::string url = "";
-        int method = 0;
-        std::vector< std::string > headers = {};
-        // need to create it as a reference
-        std::string& output;
+        RequestsWrapper(){
 
-        // ^^ currently we're not actually processing this - do it!
-        RequestsWrapper( std::string a_url,
-                        int a_method,
-                        std::vector< std::string > a_headers,
-                        std::string& a_output ): 
-                        
-                        url(a_url),
-                        method(a_method),
-                        headers(a_headers),
-                        output(a_output){
-            // need to use an initializer list instead, otherwise a copy will be made of the reference output
-            // and it won't persist outside of the lifetime of our class
-            /*
-                url = a_url;
-                method = a_method;
-                headers = a_headers;
-                output = a_output;
-            */
-            
         }
-
-        int execute(){
-            // will execute the web request requested by the caller:
-            switch( method ){
-                case 1:
-                    make_get_request();
-                    break;
-                default:
-                    // could just use a validate function in private, but this is just more simple
-                    std::cerr << "[ Request Method \'" << method << "\' << not supported ]\n";
-                    break;
-            }
-
-            return 0;
-        }
-        int make_get_request(){
+        int get( std::string url,
+                std::string& response_text,
+                std::vector< std::string > headers = { "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0" },
+                int timeout_MS = 10'000L,
+                bool follow_redirects = true
+                 ){
             CURL* curlObj;
             CURLcode responseCode;
 
@@ -95,39 +47,42 @@ class RequestsWrapper{
             curl_easy_setopt( curlObj, CURLOPT_CUSTOMREQUEST, "GET" );
             
             // this works because of the URL normalizing we did earlier
-            if( url.find("https://") != std::string::npos ){
-                curl_easy_setopt( curlObj, CURLOPT_DEFAULT_PROTOCOL, "https" );
+            if( url.find("http://") != std::string::npos ){
+                curl_easy_setopt( curlObj, CURLOPT_DEFAULT_PROTOCOL, "http" );
             }
             else{
-                curl_easy_setopt( curlObj, CURLOPT_DEFAULT_PROTOCOL, "http" );
+                // defaulting to https requests
+                curl_easy_setopt( curlObj, CURLOPT_DEFAULT_PROTOCOL, "https" );
             }
 
             // setup timeout (10 seconds, literal casting to a Long integer using suffixed "L")
-            curl_easy_setopt( curlObj, CURLOPT_TIMEOUT_MS, 10'000L );
+            curl_easy_setopt( curlObj, CURLOPT_TIMEOUT_MS, timeout_MS );
 
             // setup to allow following redirects
-            curl_easy_setopt( curlObj, CURLOPT_FOLLOWLOCATION, 1L );
-
+            if( follow_redirects ){
+                curl_easy_setopt( curlObj, CURLOPT_FOLLOWLOCATION, 1L );
+            }
+            else{
+                curl_easy_setopt( curlObj, CURLOPT_FOLLOWLOCATION, 0L );
+            }
+            
             // set up the headers
-            struct curl_slist* headers = NULL;
+            struct curl_slist* curl_headers = NULL;
 
             // this is a linkedlist of headers which is why "slist" is used w/ a pointer
-            
-            // now we need to process the header values which were passed into the class's constructor!
-            
-            headers = curl_slist_append( headers, "User-Agent: Chrome" );
-            headers = curl_slist_append( headers, "Referer: https://www.google.com" );
-            headers = curl_slist_append( headers, "Origin: google.com" );
+            for( std::string& header : headers ){
+                curl_headers = curl_slist_append( curl_headers, header.c_str() );
+            }
 
-            curl_easy_setopt( curlObj, CURLOPT_HTTPHEADER, headers );
+            curl_easy_setopt( curlObj, CURLOPT_HTTPHEADER, curl_headers );
 
-            std::cout << "[ Performing the GET request to resource \"" << url << "\" ]\n";
+            // std::cout << "[ Performing the GET request to resource \"" << url << "\" ]\n";
             
 
             // tell curl which function to use to write callback data (point of this is buffering, more efficient)
             curl_easy_setopt( curlObj, CURLOPT_WRITEFUNCTION, writeCallback );
             // tell curl what variable will store the output
-            curl_easy_setopt( curlObj, CURLOPT_WRITEDATA, &output );
+            curl_easy_setopt( curlObj, CURLOPT_WRITEDATA, &response_text );
 
             responseCode = curl_easy_perform( curlObj );
 
@@ -135,8 +90,10 @@ class RequestsWrapper{
             std::cout << "[ ResponseCode = " << responseCode << " ]\n";
             if( responseCode != CURLE_OK ){
                 // just simply prints the associated key-value error from the responseCode integer:
-                std::cerr << "[ Something went wrong when sending the GET request, error ] --> " << curl_easy_strerror( responseCode ) << '\n';
-                return 1;
+                // makes it similar to python's .GET function, easier to program with this behavior
+                std::string error = "[ Something went wrong when sending the GET request, error ] --> " + std::string(curl_easy_strerror(responseCode));
+                throw std::runtime_error(error);
+                // return 1;
             }
             
             // std::cout << "[ Output of web request ]: " << output << "\n";
@@ -151,24 +108,31 @@ class RequestsWrapper{
 
 
 int main(){
-    std::string url = "http://httpbin.org/ip";
+    std::string url = "http://htetpbin.org/ip";
     std::vector< std::string > headers = {
         "User-Agent: Chrome",
         "Referer: https://www.google.com",
         "Origin: https://www.google.com"
     };
     std::string output = "";
+    RequestsWrapper requestsObj;
+    
+    try{
+        requestsObj.get( url, output, headers, 10'000, false );
+        std::cout << "[ Output of the web request ]: " << output << '\n';
+    }
+    catch(const std::runtime_error& error){
+        // catch our custom runtime error
+        std::cout << "[ The following standard exception was thrown ]: \n";
+        std::cerr << error.what() << '\n';
+    }
+    catch(...){
+        // ^^^^ unknown error, something was thrown, and we weren't able to access the values
+        // could just be a const std::exception& error (standard library error)
+        std::cerr << "[ Some unknown error was thrown - not able to access the object/value of it. ]\n";
 
-
-    RequestsWrapper requestObj(
-        url,
-        RequestMethod().GET, // keeps developers (us) from making mistakes by doing "get" instead of "GET"
-        headers,
-        output
-    );
-    requestObj.execute();
-
-    std::cout << "[ Output of the GET request ]: " << output << '\n';
+    }
+    
 
     return 0;
 
